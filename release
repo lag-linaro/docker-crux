@@ -50,7 +50,7 @@ buildrootfs()
 {
     case "${ARCH}" in
 	x86_64)
-	    URL="http://ftp.morpheus.net/pub/linux/crux/latest/iso/crux-${VERSION}.iso"
+	    URL="http://ftp.morpheus.net/pub/linux/crux/crux-${VERSION}/iso/crux-${VERSION}.iso"
 	    ;;
 	aarch64)
 	    URL="http://resources.crux-arm.nu/releases/${VERSION}/crux-arm-rootfs-${VERSION}-aarch64.tar.xz"
@@ -119,12 +119,59 @@ testing()
 
 push()
 {
-    REMOTE=origin
+    REMOTE=personal
+#    REMOTE=origin
+    TAG=${VERSION}
     BRANCH=${VERSION}-${ARCH}
     RELEASE=release-${BRANCH}
 
     echo -e "Pushing ${RELEASE} to ${REMOTE}\n"
     git push ${REMOTE} $BRANCH:release-$BRANCH
+    git push ${REMOTE} ${TAG}
+}
+
+library()
+{
+    REMOTE=personal
+#    REMOTE=origin
+    local arch
+    local sha
+    local version
+    local latest=", latest"
+
+    git fetch ${REMOTE}
+
+    echo "Maintainers: James Mills <prologic@shortcircuit.net.au> (@prologic)"
+    echo "GitRepo: $(git config --get remote.${REMOTE}.url)"
+
+    for v in `git branch -r | grep -E ${REMOTE}/release-[0-9]+[.][0-9]+ | grep -Eo [0-9]+[.][0-9]+`; do
+	VERSIONS="$VERSIONS $v"
+    done
+    VERSIONS=$(echo $VERSIONS | tr " " "\n" | sort -Vr | uniq | tr "\n" " ")
+
+    for v in $VERSIONS; do
+	OUTPUT=""
+	ARCHES=""
+
+	for b in `git branch -r | grep -E ${REMOTE}/release-$v`; do
+	    sha=$(git log --format="%H" -n1 ${b})
+	    arch=$(echo ${b} | cut -d '-' -f 3 | sed 's/x86_64/amd64/')
+		     
+	    ARCHES="${ARCHES} $arch,"
+
+	    OUTPUT="$OUTPUT$arch-GitCommit: $sha\n"
+	done
+
+	ARCHES=$(echo $ARCHES | tr " " "\n" | sort | uniq | tr "\n" " ")
+
+	echo ""
+	echo  "Tags: ${v}${latest}"
+	echo  "Architectures: ${ARCHES%, }"
+	echo -e ${OUTPUT%'\n'}
+
+	# Only tag the first, most recent version as latest"
+	latest=""
+    done
 }
 
 main() {
@@ -147,6 +194,9 @@ main() {
         push)
 	    fetchversion "$@"
 	    push "$@"
+	    ;;
+        library)
+	    library "$@"
 	    ;;
         *)
 	    echo "Unrecognised argument $1"
